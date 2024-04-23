@@ -1,0 +1,89 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:kdgaugeview/kdgaugeview.dart';
+import 'package:sau_iot_test_app/model/nodemcu_write.dart';
+import 'package:sau_iot_test_app/util/env.dart';
+
+class MyWidget extends StatefulWidget {
+  const MyWidget({Key? key}) : super(key: key);
+
+  @override
+  State<MyWidget> createState() => _MyWidgetState();
+}
+
+class _MyWidgetState extends State<MyWidget> {
+  double value = 10;
+  GlobalKey<_MyWidgetState> globalKey = GlobalKey<_MyWidgetState>();
+  
+Future<double> getallAPI() async {
+  final response = await http.get(
+    Uri.parse('${Env.URLAPI}get_all_data.php'),
+    headers: {'Content-Type': 'application/json'},
+  );
+
+  if (response.statusCode == 200) {
+    final responseData = jsonDecode(response.body);
+    final responseDataList = responseData.map<Nodemcu_write>((json) {
+      return Nodemcu_write.fromJson(json);
+    }).toList();
+
+    // Assuming you want to update the 'value' with the first item in the list
+    setState(() {
+      value = responseDataList.isNotEmpty ? responseDataList[0].value : 0;
+    });
+
+    return value;
+  } else {
+    throw Exception('Failed to fetch data');
+  }
+}
+
+  // Timer to fetch data every 5 minutes
+  late Timer timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Call fetchData() immediately to fetch data when the widget initializes
+    getallAPI();
+    // Set up a timer to call fetchData() every 5 minutes
+    timer = Timer.periodic(Duration(minutes: 5), (Timer t) => getallAPI());
+  }
+
+  @override
+  void dispose() {
+    // Dispose of the timer to prevent memory leaks
+    timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Container(
+            child: KdGaugeView(
+              baseGaugeColor: Colors.cyanAccent,
+              activeGaugeColor: Colors.red,
+              key: globalKey, // Use UniqueKey() as key
+              minSpeed: 0,
+              maxSpeed: 180,
+              speed: value, // Use the value variable to update the gauge
+              animate: true,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void main() {
+  runApp(MaterialApp(
+    home: MyWidget(),
+    debugShowCheckedModeBanner: false,
+  ));
+}
